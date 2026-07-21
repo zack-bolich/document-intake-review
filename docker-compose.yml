@@ -1,4 +1,10 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+    ports: ["5173:80"]
+    depends_on:
+      - api
   api:
     build: .
     environment:
@@ -21,4 +27,3 @@ services:
       retries: 10
 volumes:
   postgres_data:
-

@@ -48,3 +48,15 @@ def test_unreadable_document_goes_to_dead_letter(client):
 def test_openapi_and_health(client):
     assert client.get("/health").json() == {"status": "ok"}
     assert "/api/v1/documents" in client.get("/openapi.json").json()["paths"]
+
+
+def test_frontend_origin_is_allowed(client):
+    response = client.options(
+        "/api/v1/documents",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"

@@ -1,12 +1,14 @@
 # Document Intake and Review Automation
 
-A backend-first portfolio application that ingests **synthetic** invoice and receipt PDFs, extracts validated fields with deterministic rules, scores confidence, detects duplicates, and routes uncertain records through human review and approval.
+A full-stack portfolio application that ingests **synthetic** invoice and receipt PDFs, extracts validated fields with deterministic rules, scores confidence, detects duplicates, and routes uncertain records through a polished human review dashboard.
 
-This milestone deliberately contains no frontend or live Google/Gmail credentials. The API is tested first; React, Google Sheets export, Gmail ingestion, summary email, and the optional n8n webhook are the next integration milestone.
+The tested backend now has a React dashboard. Live Google/Gmail credentials remain deliberately deferred; Sheets export, Gmail ingestion, summary email, and the optional n8n webhook are the next integration milestone.
 
 ## Implemented
 
 - FastAPI and Pydantic API with interactive OpenAPI documentation
+- React, TypeScript, and Vite review dashboard
+- upload, status filters, confidence visualization, corrections, approvals, audit history, and dead-letter retry UI
 - SQLAlchemy models supporting SQLite locally and PostgreSQL in Docker
 - deterministic PyMuPDF extraction for PDF, plus TXT and JSON compatibility
 - field-level and aggregate confidence scores
@@ -27,12 +29,22 @@ uvicorn app.main:app --reload
 
 Open [http://localhost:8000/docs](http://localhost:8000/docs). SQLite creates `document_intake.db` automatically.
 
+In a second terminal, run the dashboard:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). The frontend expects the API at `http://127.0.0.1:8000/api/v1`; override it with `VITE_API_URL` in `frontend/.env.local` when needed.
+
 ```powershell
 ruff check app tests
 pytest --cov=app --cov-report=term-missing
 ```
 
-For PostgreSQL: `docker compose up --build`.
+For the complete React + FastAPI + PostgreSQL stack: `docker compose up --build`, then open [http://localhost:5173](http://localhost:5173).
 
 Regenerate the fictional PDF fixtures with `python scripts/generate_synthetic_pdfs.py`.
 
@@ -52,9 +64,8 @@ Each recognized field receives a deterministic confidence score; the aggregate i
 
 All fixtures and names are fictional. `.env.example` contains configuration only. Live OAuth integrations will use environment-injected secrets in a later milestone.
 
-## Roadmap after backend validation
+## Roadmap
 
-- React review dashboard
 - Google Sheets export of approved records
 - Gmail attachment ingestion and processing-summary email
 - retry endpoint and scheduled retry policy
