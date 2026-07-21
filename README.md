@@ -1,0 +1,62 @@
+# Document Intake and Review Automation
+
+A backend-first portfolio application that ingests **synthetic** invoice and receipt PDFs, extracts validated fields with deterministic rules, scores confidence, detects duplicates, and routes uncertain records through human review and approval.
+
+This milestone deliberately contains no frontend or live Google/Gmail credentials. The API is tested first; React, Google Sheets export, Gmail ingestion, summary email, and the optional n8n webhook are the next integration milestone.
+
+## Implemented
+
+- FastAPI and Pydantic API with interactive OpenAPI documentation
+- SQLAlchemy models supporting SQLite locally and PostgreSQL in Docker
+- deterministic PyMuPDF extraction for PDF, plus TXT and JSON compatibility
+- field-level and aggregate confidence scores
+- content-hash and business-key duplicate detection
+- review queue, corrections, approval rules, timestamps, and audit history
+- durable database dead letters for unreadable documents
+- retry counts and a dead-letter retry endpoint
+- Pytest, Ruff, GitHub Actions, Dockerfile, and Docker Compose
+
+## Run locally
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+uvicorn app.main:app --reload
+```
+
+Open [http://localhost:8000/docs](http://localhost:8000/docs). SQLite creates `document_intake.db` automatically.
+
+```powershell
+ruff check app tests
+pytest --cov=app --cov-report=term-missing
+```
+
+For PostgreSQL: `docker compose up --build`.
+
+Regenerate the fictional PDF fixtures with `python scripts/generate_synthetic_pdfs.py`.
+
+## API workflow
+
+1. `POST /api/v1/documents` with a synthetic PDF, TXT, or JSON file.
+2. Inspect `confidence`, `field_confidence`, `status`, and `duplicate_of_id`.
+3. `GET /api/v1/documents?status=review` for the review queue.
+4. `PATCH /api/v1/documents/{id}` to correct fields.
+5. `POST /api/v1/documents/{id}/approve` to approve a complete, non-duplicate record.
+6. `GET /api/v1/documents/{id}/audit` for event history.
+7. `GET /api/v1/dead-letters` for extraction failures.
+
+## Confidence and privacy
+
+Each recognized field receives a deterministic confidence score; the aggregate is their mean. Missing required fields or a score below `REVIEW_THRESHOLD` routes the record to review. A future LLM fallback may run only behind this low-confidence boundary; none is enabled now.
+
+All fixtures and names are fictional. `.env.example` contains configuration only. Live OAuth integrations will use environment-injected secrets in a later milestone.
+
+## Roadmap after backend validation
+
+- React review dashboard
+- Google Sheets export of approved records
+- Gmail attachment ingestion and processing-summary email
+- retry endpoint and scheduled retry policy
+- optional signed n8n webhook
+- optional low-confidence LLM extraction with provenance

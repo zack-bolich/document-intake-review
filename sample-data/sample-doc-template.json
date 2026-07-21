@@ -1,0 +1,8 @@
+{
+  "doc_type": "invoice",
+  "document_number": "INV-9999",
+  "vendor": "Template Vendor",
+  "date": "2026-07-05",
+  "amount": "10.00",
+  "currency": "USD"
+}

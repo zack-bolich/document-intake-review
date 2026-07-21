@@ -1,0 +1,5 @@
+Vendor: Your Vendor
+Invoice Number: INV-1234
+Date: 2026-07-01
+Amount: 123.45
+Currency: USD

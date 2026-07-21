@@ -1,0 +1,4 @@
+filename,document_type,document_number,vendor,amount,currency,date,tags,processed_at
+invoice_1001.txt,invoice,INV-1001,ACME Tools,1420.00,USD,2026-07-03,financial;vendor,2026-07-05T10:00:00Z
+receipt_2001.txt,receipt,RCP-2001,Coffee Shop,18.75,USD,2026-07-04,reimbursements;merchant,2026-07-05T10:01:00Z
+invoice_1002.json,invoice,INV-1002,Bluewater Logistics,900.00,USD,2026-07-01,financial;vendor,2026-07-05T10:02:00Z

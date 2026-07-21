@@ -1,0 +1,2 @@
+filename,error,raw_text_excerpt,processed_at
+weird_doc.txt,missing_vendor|missing_amount|missing_date|missing_document_number,Hello this is not structured|No useful fields included|Random note line,2026-07-05T10:03:00Z

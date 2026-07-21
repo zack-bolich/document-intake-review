@@ -1,0 +1,6 @@
+Vendor: ACME Tools
+Invoice Number: INV-1001
+Date: 2026-07-03
+Amount: 1420.00
+Currency: USD
+Note: Quarterly supplies and maintenance

@@ -1,0 +1,24 @@
+services:
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://document_user:document_password@db:5432/document_intake
+    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: document_intake
+      POSTGRES_USER: document_user
+      POSTGRES_PASSWORD: document_password
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U document_user -d document_intake"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  postgres_data:
+
