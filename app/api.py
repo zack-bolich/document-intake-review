@@ -1,13 +1,15 @@
 from datetime import UTC, datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
 from app.models import AuditEvent, DeadLetter, Document, DocumentStatus
-from app.schemas import ApprovalRequest, AuditRead, DeadLetterRead, DocumentCorrection, DocumentRead
+from app.exports import append_to_google_sheet, approved_csv
+from app.schemas import ApprovalRequest, AuditRead, DeadLetterRead, DocumentCorrection, DocumentRead, ExportResult
 from app.service import audit, ingest
 
 router = APIRouter(prefix="/api/v1")
@@ -118,3 +120,76 @@ def retry_dead_letter(dead_letter_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(document)
     return document
+
+
+@router.get(
+    "/exports/approved.csv",
+    summary="Download approved records as CSV",
+    response_class=Response,
+)
+def export_approved_csv(db: Session = Depends(get_db)):
+    documents = list(db.scalars(
+        select(Document)
+        .where(Document.status == DocumentStatus.APPROVED)
+        .order_by(Document.approved_at, Document.id)
+    ))
+    for document in documents:
+        audit(db, document.id, "exported_csv", details={"destination": "download"})
+    db.commit()
+    return Response(
+        content=approved_csv(documents),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="approved-records.csv"'},
+    )
+
+
+@router.post(
+    "/exports/google-sheets",
+    response_model=ExportResult,
+    summary="Append approved, unexported records to Google Sheets",
+)
+def export_google_sheets(db: Session = Depends(get_db)):
+    settings = get_settings()
+    credentials_file = settings.google_sheets_credentials_file
+    spreadsheet_id = settings.google_sheets_spreadsheet_id
+    if not credentials_file or not spreadsheet_id:
+        raise HTTPException(503, "Google Sheets export is not configured")
+    if not Path(credentials_file).is_file():
+        raise HTTPException(503, "Google Sheets credentials file was not found")
+    already_exported = exists().where(
+        AuditEvent.document_id == Document.id,
+        AuditEvent.action == "exported_google_sheets",
+    )
+    documents = list(db.scalars(
+        select(Document)
+        .where(Document.status == DocumentStatus.APPROVED, ~already_exported)
+        .order_by(Document.approved_at, Document.id)
+    ))
+    approved_count = db.scalar(
+        select(func.count(Document.id)).where(Document.status == DocumentStatus.APPROVED)
+    ) or 0
+    if not documents:
+        return ExportResult(
+            destination="google_sheets",
+            exported_count=0,
+            skipped_count=approved_count,
+            spreadsheet_id=spreadsheet_id,
+        )
+    try:
+        exported_count = append_to_google_sheet(
+            documents,
+            credentials_file=Path(credentials_file),
+            spreadsheet_id=spreadsheet_id,
+            range_name=settings.google_sheets_range,
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"Google Sheets export failed: {exc}") from exc
+    for document in documents:
+        audit(db, document.id, "exported_google_sheets", details={"spreadsheet_id": spreadsheet_id})
+    db.commit()
+    return ExportResult(
+        destination="google_sheets",
+        exported_count=exported_count,
+        skipped_count=approved_count - exported_count,
+        spreadsheet_id=spreadsheet_id,
+    )

@@ -30,4 +30,18 @@ export const api = {
     }),
   audit: (id: string) => request<AuditEvent[]>(`/documents/${id}/audit`),
   retry: (id: string) => request<DocumentRecord>(`/dead-letters/${id}/retry`, { method: 'POST' }),
+  downloadApprovedCsv: async () => {
+    const response = await fetch(`${API_URL}/exports/approved.csv`)
+    if (!response.ok) throw new Error('CSV export failed')
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'approved-records.csv'
+    anchor.click()
+    URL.revokeObjectURL(url)
+  },
+  exportGoogleSheets: () => request<{
+    destination: string; exported_count: number; skipped_count: number; spreadsheet_id: string
+  }>('/exports/google-sheets', { method: 'POST' }),
 }

@@ -67,3 +67,9 @@ class DeadLetterRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
+class ExportResult(BaseModel):
+    destination: str
+    exported_count: int
+    skipped_count: int = 0
+    spreadsheet_id: str | None = None

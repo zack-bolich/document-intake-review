@@ -9,6 +9,7 @@ The tested backend now has a React dashboard. Live Google/Gmail credentials rema
 - FastAPI and Pydantic API with interactive OpenAPI documentation
 - React, TypeScript, and Vite review dashboard
 - upload, status filters, confidence visualization, corrections, approvals, audit history, and dead-letter retry UI
+- approved-record CSV download and idempotent Google Sheets export
 - SQLAlchemy models supporting SQLite locally and PostgreSQL in Docker
 - deterministic PyMuPDF extraction for PDF, plus TXT and JSON compatibility
 - field-level and aggregate confidence scores
@@ -57,6 +58,27 @@ Regenerate the fictional PDF fixtures with `python scripts/generate_synthetic_pd
 5. `POST /api/v1/documents/{id}/approve` to approve a complete, non-duplicate record.
 6. `GET /api/v1/documents/{id}/audit` for event history.
 7. `GET /api/v1/dead-letters` for extraction failures.
+8. `GET /api/v1/exports/approved.csv` to download approved records.
+9. `POST /api/v1/exports/google-sheets` to append approvals not previously exported.
+
+## Google Sheets setup (optional)
+
+CSV export requires no credentials. To enable Google Sheets locally:
+
+1. Create a Google Cloud project and enable the Google Sheets API.
+2. Create a service account and download its JSON key.
+3. Save the key as `credentials/service-account.json`. The entire `credentials/` directory is ignored by Git.
+4. Create a spreadsheet with a tab named `Approved Records`.
+5. Share that spreadsheet with the service account's `client_email` as an editor.
+6. Copy `.env.example` to `.env` and set:
+
+```dotenv
+GOOGLE_SHEETS_CREDENTIALS_FILE=credentials/service-account.json
+GOOGLE_SHEETS_SPREADSHEET_ID=the_id_between_d_and_edit_in_the_sheet_url
+GOOGLE_SHEETS_RANGE=Approved Records!A:I
+```
+
+Restart FastAPI after changing `.env`. The exporter creates the header row when needed and uses audit events to avoid appending the same approved record twice. See Google's official [Sheets values guide](https://developers.google.com/workspace/sheets/api/guides/values) for the underlying append behavior.
 
 ## Confidence and privacy
 
@@ -66,7 +88,6 @@ All fixtures and names are fictional. `.env.example` contains configuration only
 
 ## Roadmap
 
-- Google Sheets export of approved records
 - Gmail attachment ingestion and processing-summary email
 - retry endpoint and scheduled retry policy
 - optional signed n8n webhook

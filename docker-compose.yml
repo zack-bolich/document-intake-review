@@ -9,6 +9,11 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql+psycopg://document_user:document_password@db:5432/document_intake
+      GOOGLE_SHEETS_CREDENTIALS_FILE: /run/secrets/document-intake/service-account.json
+      GOOGLE_SHEETS_SPREADSHEET_ID: ${GOOGLE_SHEETS_SPREADSHEET_ID:-}
+      GOOGLE_SHEETS_RANGE: ${GOOGLE_SHEETS_RANGE:-Approved Records!A:I}
+    volumes:
+      - ./credentials:/run/secrets/document-intake:ro
     ports: ["8000:8000"]
     depends_on:
       db:

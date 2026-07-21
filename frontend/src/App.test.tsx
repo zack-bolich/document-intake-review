@@ -38,4 +38,11 @@ describe('review dashboard', () => {
     await userEvent.click(screen.getAllByRole('button', { name: /Needs review/ })[0])
     expect(screen.getByText('INV-1')).toBeInTheDocument()
   })
+
+  it('disables exports when there are no approved records', async () => {
+    render(<App />)
+    await screen.findByText('Fictional Repair Works')
+    expect(screen.getByRole('button', { name: 'Download CSV' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Export to Sheets' })).toBeDisabled()
+  })
 })
