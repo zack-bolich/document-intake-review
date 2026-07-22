@@ -4,6 +4,17 @@ A full-stack document intake and human-review application. Ledgerline ingests **
 
 The project is designed as a privacy-safe portfolio demonstration: fixtures are fictional, integrations are opt-in, and credentials are excluded from version control.
 
+![Ledgerline dashboard showing approved, review, and duplicate records](demo/dashboard.png)
+
+<details>
+<summary>Review workflow and API documentation</summary>
+
+![Human review drawer with field confidence and audit history](demo/review-workflow.png)
+
+![FastAPI OpenAPI documentation](demo/api-docs.png)
+
+</details>
+
 ## Why it exists
 
 Manual document intake is slow, repetitive, and difficult to audit. Ledgerline automates high-confidence records while preserving human judgment for incomplete or uncertain documents. Every correction and approval is recorded, so automation never removes accountability.
