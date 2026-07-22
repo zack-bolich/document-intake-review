@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "Document Intake and Review API"
+    app_name: str = "Ledgerline Document Intake API"
     database_url: str = "sqlite:///./document_intake.db"
     review_threshold: float = 0.85
     upload_dir: Path = Path("data/uploads")

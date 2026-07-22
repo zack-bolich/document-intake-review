@@ -1,8 +1,34 @@
-# Document Intake and Review Automation
+# Ledgerline
 
-A full-stack portfolio application that ingests **synthetic** invoice and receipt PDFs, extracts validated fields with deterministic rules, scores confidence, detects duplicates, and routes uncertain records through a polished human review dashboard.
+A full-stack document intake and human-review application. Ledgerline ingests **synthetic** invoice and receipt PDFs, extracts validated fields with deterministic rules, scores confidence, detects duplicates, and routes uncertain records to an auditable review queue.
 
-The tested backend now has a React dashboard. Live Google/Gmail credentials remain deliberately deferred; Sheets export, Gmail ingestion, summary email, and the optional n8n webhook are the next integration milestone.
+The project is designed as a privacy-safe portfolio demonstration: fixtures are fictional, integrations are opt-in, and credentials are excluded from version control.
+
+## Why it exists
+
+Manual document intake is slow, repetitive, and difficult to audit. Ledgerline automates high-confidence records while preserving human judgment for incomplete or uncertain documents. Every correction and approval is recorded, so automation never removes accountability.
+
+```mermaid
+flowchart LR
+    A["PDF upload or Gmail attachment"] --> B["Deterministic extraction"]
+    B --> C["Validation and confidence scoring"]
+    C --> D{"Confident and complete?"}
+    D -->|Yes| E["Approved"]
+    D -->|No| F["Human review"]
+    F --> G["Correct and approve"]
+    E --> H["CSV or Google Sheets"]
+    G --> H
+    C --> I["Duplicate detection"]
+    B --> J["Dead-letter queue and retry"]
+```
+
+## Engineering highlights
+
+- **Deterministic by default:** PyMuPDF extraction and explicit parsing rules keep results explainable and testable.
+- **Human-in-the-loop controls:** low-confidence or incomplete records enter a React review workflow instead of being silently accepted.
+- **Idempotent processing:** content hashes and business keys prevent repeated uploads and Gmail retries from creating duplicate records.
+- **Operational traceability:** audit events, timestamps, retry counters, failure details, and a durable dead-letter queue make processing observable.
+- **Portable deployment:** SQLite supports a one-command local evaluation; Docker Compose runs React, FastAPI, and PostgreSQL together.
 
 ## Implemented
 
@@ -17,9 +43,24 @@ The tested backend now has a React dashboard. Live Google/Gmail credentials rema
 - review queue, corrections, approval rules, timestamps, and audit history
 - durable database dead letters for unreadable documents
 - retry counts and a dead-letter retry endpoint
+- Gmail OAuth attachment ingestion with per-attachment idempotency and optional processing summaries
 - Pytest, Ruff, GitHub Actions, Dockerfile, and Docker Compose
 
-## Run locally
+## Technology
+
+| Layer | Implementation |
+| --- | --- |
+| API and validation | Python, FastAPI, Pydantic |
+| Persistence | SQLAlchemy, SQLite, PostgreSQL |
+| Extraction | PyMuPDF with deterministic field rules |
+| Dashboard | React, TypeScript, Vite |
+| Integrations | Gmail OAuth, Google Sheets, CSV |
+| Quality | Pytest, Vitest, ESLint, Ruff, GitHub Actions |
+| Deployment | Docker, Docker Compose, Nginx |
+
+## Quick start
+
+Requirements: Python 3.11+, Node.js 22+, and npm.
 
 ```powershell
 python -m venv .venv
@@ -40,12 +81,20 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). The frontend expects the API at `http://127.0.0.1:8000/api/v1`; override it with `VITE_API_URL` in `frontend/.env.local` when needed.
 
+Upload one of the generated fixtures from `sample-data/synthetic-pdfs/`. The high-confidence invoice is approved automatically; `invoice_needs_review.pdf` demonstrates correction and approval in the dashboard.
+
 ```powershell
 ruff check app tests
 pytest --cov=app --cov-report=term-missing
 ```
 
-For the complete React + FastAPI + PostgreSQL stack: `docker compose up --build`, then open [http://localhost:5173](http://localhost:5173).
+For the complete React + FastAPI + PostgreSQL stack:
+
+```powershell
+docker compose up --build
+```
+
+Then open [http://localhost:5173](http://localhost:5173). API documentation remains available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
 Regenerate the fictional PDF fixtures with `python scripts/generate_synthetic_pdfs.py`.
 
@@ -60,6 +109,8 @@ Regenerate the fictional PDF fixtures with `python scripts/generate_synthetic_pd
 7. `GET /api/v1/dead-letters` for extraction failures.
 8. `GET /api/v1/exports/approved.csv` to download approved records.
 9. `POST /api/v1/exports/google-sheets` to append approvals not previously exported.
+
+FastAPI publishes the complete interactive OpenAPI contract at `/docs`; the dashboard uses the same public endpoints documented there.
 
 ## Google Sheets setup (optional)
 
@@ -114,16 +165,34 @@ Then explicitly request sending:
 python scripts/process_gmail.py --send-summary
 ```
 
-OAuth scopes are limited to `gmail.readonly` and `gmail.send`. See Google's official [Python quickstart](https://developers.google.com/workspace/gmail/api/quickstart/python) and [sending guide](https://developers.google.com/workspace/gmail/api/guides/sending).
+OAuth scopes are limited to `gmail.readonly` and `gmail.send`. The processor reports scanned messages, attachments, approvals, reviews, duplicates, failures, and skips. See Google's official [Python quickstart](https://developers.google.com/workspace/gmail/api/quickstart/python) and [sending guide](https://developers.google.com/workspace/gmail/api/guides/sending).
+
+## Optional n8n orchestration
+
+Ledgerline does not require n8n. An n8n workflow can be added as an orchestration layer—Gmail trigger, attachment download, API upload, status-based routing, notifications, and scheduled retries—while FastAPI remains responsible for parsing, validation, deduplication, review state, and audit history. Exported workflows must contain no credentials, and any public webhook should be authenticated.
 
 ## Confidence and privacy
 
 Each recognized field receives a deterministic confidence score; the aggregate is their mean. Missing required fields or a score below `REVIEW_THRESHOLD` routes the record to review. A future LLM fallback may run only behind this low-confidence boundary; none is enabled now.
 
-All fixtures and names are fictional. `.env.example` contains configuration only. Live OAuth integrations will use environment-injected secrets in a later milestone.
+All fixtures and names are fictional. `.env.example` contains configuration only. `.env`, OAuth tokens, service-account keys, local databases, exports, and uploaded files are ignored by Git.
+
+## Verification
+
+The repository currently contains 15 backend tests and 3 frontend tests covering extraction, review, duplicates, audit history, exports, Gmail processing, and dashboard behavior.
+
+```powershell
+python -m ruff check app tests scripts/gmail_auth.py scripts/process_gmail.py scripts/generate_synthetic_pdfs.py
+python -m pytest --cov=app --cov-report=term-missing
+cd frontend
+npm test
+npm run lint
+npm run build
+```
+
+GitHub Actions runs these checks on every push and pull request.
 
 ## Roadmap
 
-- retry endpoint and scheduled retry policy
-- optional signed n8n webhook
+- authenticated optional n8n webhook and example workflow
 - optional low-confidence LLM extraction with provenance

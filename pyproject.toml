@@ -3,9 +3,9 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "document-intake-review"
+name = "ledgerline-document-intake"
 version = "0.1.0"
-description = "Auditable document intake and human review backend"
+description = "Auditable document intake and human review automation"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115,<1",
