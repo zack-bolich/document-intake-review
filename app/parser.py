@@ -11,9 +11,22 @@ import fitz
 PATTERNS = {
     "document_number": re.compile(r"(?:invoice\s*(?:number|no\.?|#)|receipt\s*(?:number|no\.?|#)?|reference)\s*[:#-]?\s*([A-Z0-9-]+)", re.I),
     "vendor": re.compile(r"(?:vendor|merchant|sold\s+by|from)\s*[:#-]\s*([^\r\n]+)", re.I),
-    "amount": re.compile(r"(?:grand\s+total|total|amount\s+due|amount)\s*[:#-]?\s*(?:USD\s*)?\$?\s*([0-9,]+(?:\.\d{2})?)", re.I),
-    "currency": re.compile(r"(?:currency|curr)\s*[:#-]?\s*([A-Z]{3})\b", re.I),
-    "date": re.compile(r"(?:date\s*[:#-]?\s*)?(\d{4}-\d{2}-\d{2})", re.I),
+    "amount": re.compile(
+        r"(?<!sub)(?:grand\s+total|total\s+due|total|amount\s+due|amount)"
+        r"(?:\s*\([A-Z]{3}\))?\s*[:#-]?\s*(?:[A-Z]{3}\s*)?\$?\s*"
+        r"([0-9,]+(?:\.\d{2})?)",
+        re.I,
+    ),
+    "currency": re.compile(
+        r"(?:currency|curr)\s*[:#-]?\s*([A-Z]{3})\b|"
+        r"(?:total(?:\s+due)?)\s*\(([A-Z]{3})\)",
+        re.I,
+    ),
+    "date": re.compile(
+        r"(?:issue\s+date|invoice\s+date|date)\s*[:#-]?\s*"
+        r"(\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})",
+        re.I,
+    ),
 }
 
 
@@ -50,9 +63,17 @@ def parse_document(filename: str, data: bytes) -> ParseResult:
     values: dict = {}
     scores: dict[str, float] = {}
     for name, pattern in PATTERNS.items():
-        match = pattern.search(text)
-        values[name] = match.group(1).strip() if match else None
+        matches = list(pattern.finditer(text))
+        match = matches[-1] if name == "amount" and matches else (matches[0] if matches else None)
+        values[name] = next(
+            (group.strip() for group in match.groups() if group),
+            None,
+        ) if match else None
         scores[name] = 0.98 if match else 0.0
+
+    if not values["vendor"]:
+        values["vendor"] = _infer_vendor(text)
+        scores["vendor"] = 0.85 if values["vendor"] else 0.0
 
     lower = text.lower()
     if "invoice" in lower:
@@ -72,7 +93,7 @@ def parse_document(filename: str, data: bytes) -> ParseResult:
         issues.append("invalid_amount")
     raw_date = values.pop("date")
     try:
-        values["document_date"] = date.fromisoformat(raw_date) if raw_date else None
+        values["document_date"] = _parse_date(raw_date) if raw_date else None
     except ValueError:
         values.pop("date", None)
         values["document_date"] = None
@@ -86,3 +107,24 @@ def parse_document(filename: str, data: bytes) -> ParseResult:
             issues.append(f"missing_{name}")
     confidence = round(sum(scores.values()) / len(scores), 4)
     return ParseResult(values, scores, confidence, issues, text)
+
+
+def _parse_date(value: str) -> date:
+    if "-" in value:
+        return date.fromisoformat(value)
+    day, month, year = (int(part) for part in value.split("/"))
+    return date(year, month, day)
+
+
+def _infer_vendor(text: str) -> str | None:
+    """Use the first heading before BILL TO when no explicit vendor label exists."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    boundary = next(
+        (index for index, line in enumerate(lines) if line.upper() == "BILL TO"),
+        min(len(lines), 5),
+    )
+    ignored = re.compile(r"^(?:invoice|receipt|tax\s+invoice)(?:\s+[A-Z0-9-]+)?$", re.I)
+    return next(
+        (line for line in lines[:boundary] if not ignored.fullmatch(line)),
+        None,
+    )

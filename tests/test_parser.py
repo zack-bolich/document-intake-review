@@ -24,3 +24,29 @@ def test_missing_fields_are_low_confidence():
     assert "missing_amount" in result.issues
     assert result.confidence < 0.85
 
+
+def test_australian_invoice_uses_total_not_subtotal():
+    text = b"""Your Business Name
+BILL TO
+Invoice 2022435
+Your Client
+Tax invoice
+Issue date: 19/7/2022
+Due date: 3/8/2022
+Reference: 2022435
+Total due (AUD)
+$2,510.00
+Subtotal:
+$2,100.00
+Total (AUD):
+$2,510.00
+"""
+
+    result = parse_document("invoice.txt", text)
+
+    assert result.fields["document_number"] == "2022435"
+    assert result.fields["vendor"] == "Your Business Name"
+    assert result.fields["amount"] == Decimal("2510.00")
+    assert result.fields["currency"] == "AUD"
+    assert result.fields["document_date"].isoformat() == "2022-07-19"
+    assert result.issues == []
