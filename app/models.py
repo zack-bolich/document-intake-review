@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, JSON, LargeBinary, Numeric, String, Text
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, JSON, LargeBinary, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -66,3 +66,18 @@ class DeadLetter(Base):
     retry_count: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class GmailAttachment(Base):
+    __tablename__ = "gmail_attachments"
+    __table_args__ = (
+        UniqueConstraint("gmail_message_id", "gmail_attachment_id", name="uq_gmail_attachment"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    gmail_message_id: Mapped[str] = mapped_column(String(255), index=True)
+    gmail_attachment_id: Mapped[str] = mapped_column(String(255))
+    filename: Mapped[str] = mapped_column(String(255))
+    document_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"), index=True)
+    outcome: Mapped[str] = mapped_column(String(30))
+    error: Mapped[str | None] = mapped_column(Text)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

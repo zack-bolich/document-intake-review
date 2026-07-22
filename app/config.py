@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     google_sheets_credentials_file: Path | None = None
     google_sheets_spreadsheet_id: str | None = None
     google_sheets_range: str = "Approved Records!A:I"
+    gmail_client_file: Path = Path("credentials/gmail-client.json")
+    gmail_token_file: Path = Path("credentials/gmail-token.json")
+    gmail_query: str = "has:attachment filename:pdf newer_than:30d"
+    gmail_summary_recipient: str | None = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

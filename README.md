@@ -80,6 +80,42 @@ GOOGLE_SHEETS_RANGE=Approved Records!A:I
 
 Restart FastAPI after changing `.env`. The exporter creates the header row when needed and uses audit events to avoid appending the same approved record twice. See Google's official [Sheets values guide](https://developers.google.com/workspace/sheets/api/guides/values) for the underlying append behavior.
 
+## Gmail attachment intake (optional)
+
+Gmail access is local and opt-in. No mailbox credentials or tokens belong in Git.
+
+1. Enable the Gmail API, configure an External OAuth app in Testing, and add your Gmail address as a test user.
+2. Create a Desktop app OAuth client and save it as `credentials/gmail-client.json`.
+3. Authorize once:
+
+```powershell
+python scripts/gmail_auth.py
+```
+
+Google opens a consent page. After approval, the ignored `credentials/gmail-token.json` file stores the refresh token.
+
+4. Process matching PDF attachments without sending email:
+
+```powershell
+python scripts/process_gmail.py
+```
+
+The default search is `has:attachment filename:pdf newer_than:30d`. Each Gmail message/attachment pair is tracked, so later runs skip it.
+
+5. To send the summary, set your recipient in `.env`:
+
+```dotenv
+GMAIL_SUMMARY_RECIPIENT=your-address@example.com
+```
+
+Then explicitly request sending:
+
+```powershell
+python scripts/process_gmail.py --send-summary
+```
+
+OAuth scopes are limited to `gmail.readonly` and `gmail.send`. See Google's official [Python quickstart](https://developers.google.com/workspace/gmail/api/quickstart/python) and [sending guide](https://developers.google.com/workspace/gmail/api/guides/sending).
+
 ## Confidence and privacy
 
 Each recognized field receives a deterministic confidence score; the aggregate is their mean. Missing required fields or a score below `REVIEW_THRESHOLD` routes the record to review. A future LLM fallback may run only behind this low-confidence boundary; none is enabled now.
@@ -88,7 +124,6 @@ All fixtures and names are fictional. `.env.example` contains configuration only
 
 ## Roadmap
 
-- Gmail attachment ingestion and processing-summary email
 - retry endpoint and scheduled retry policy
 - optional signed n8n webhook
 - optional low-confidence LLM extraction with provenance
