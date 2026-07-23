@@ -9,7 +9,7 @@ import fitz
 
 
 PATTERNS = {
-    "document_number": re.compile(r"(?:invoice\s*(?:number|no\.?|#)|receipt\s*(?:number|no\.?|#)?|reference)\s*[:#-]?\s*([A-Z0-9-]+)", re.I),
+    "document_number": re.compile(r"(?:invoice[ \t]*(?:number|no\.?|#)?|receipt[ \t]*(?:number|no\.?|#)?|reference)[ \t]*[:#-]?[ \t]*([A-Z0-9-]+)", re.I),
     "vendor": re.compile(r"(?:vendor|merchant|sold\s+by|from)\s*[:#-]\s*([^\r\n]+)", re.I),
     "amount": re.compile(
         r"(?<!sub)(?:grand\s+total|total\s+due|total|amount\s+due|amount)"

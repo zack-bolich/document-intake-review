@@ -13,6 +13,13 @@ def test_extracts_structured_invoice_pdf(invoice_pdf):
     assert result.issues == []
 
 
+def test_extracts_receipt_number_without_crossing_line_boundary(receipt_pdf):
+    result = parse_document("receipt.pdf", receipt_pdf)
+    assert result.fields["document_number"] == "RCP-2002"
+    assert result.fields["vendor"] == "Synthetic Corner Cafe"
+    assert result.fields["document_type"] == "receipt"
+
+
 def test_preserves_json_document_number_regression():
     data = b'{"doc_type":"invoice","document_number":"INV-1002","vendor":"Bluewater Logistics","date":"2026-07-01","amount":"900.00","currency":"USD"}'
     result = parse_document("invoice.json", data)

@@ -17,6 +17,9 @@ htmlcov/
 frontend/node_modules/
 frontend/dist/
 frontend/.env.local
+node_modules/
+playwright-report/
+test-results/
 credentials/
 service-account*.json
 exports/
