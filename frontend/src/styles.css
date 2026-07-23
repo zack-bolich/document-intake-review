@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:ital,wght@0,500;1,500&display=swap');
 
-:root { font-family: 'DM Sans', sans-serif; color: #17211d; background: #f3f1eb; font-synthesis: none; --ink:#17211d; --muted:#6c746f; --line:#d9d9d1; --paper:#fbfaf6; --green:#16614a; --lime:#c5e36b; --amber:#aa6b14; --red:#a33c35; }
+:root { font-family: 'DM Sans', sans-serif; color: #17211d; background: #f3f1eb; font-synthesis: none; --ink:#17211d; --muted:#626a65; --line:#d9d9d1; --paper:#fbfaf6; --green:#16614a; --lime:#c5e36b; --amber:#925a0d; --red:#a33c35; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 85% 0%, #e4edd6 0, transparent 28rem), #f3f1eb; }
 button, input { font: inherit; }

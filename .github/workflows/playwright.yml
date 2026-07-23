@@ -1,0 +1,45 @@
+name: playwright
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Start isolated application stack
+        run: docker compose down --volumes --remove-orphans && docker compose up --build --wait --wait-timeout 180
+      - name: Run Playwright suite
+        run: npm run test:e2e
+      - name: Upload Playwright report and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Capture service logs
+        if: failure()
+        run: docker compose logs --no-color > docker-compose.log
+      - name: Upload service logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-compose-logs
+          path: docker-compose.log
+          retention-days: 14
+      - name: Stop application stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans

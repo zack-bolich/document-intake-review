@@ -1,5 +1,8 @@
 # Ledgerline
 
+[![backend](https://github.com/zack-bolich/document-intake-review/actions/workflows/backend.yml/badge.svg)](https://github.com/zack-bolich/document-intake-review/actions/workflows/backend.yml)
+[![playwright](https://github.com/zack-bolich/document-intake-review/actions/workflows/playwright.yml/badge.svg)](https://github.com/zack-bolich/document-intake-review/actions/workflows/playwright.yml)
+
 A full-stack document intake and human-review application. Ledgerline ingests **synthetic** invoice and receipt PDFs, extracts validated fields with deterministic rules, scores confidence, detects duplicates, and routes uncertain records to an auditable review queue.
 
 The project is designed as a privacy-safe portfolio demonstration: fixtures are fictional, integrations are opt-in, and credentials are excluded from version control.
@@ -202,6 +205,23 @@ npm run build
 ```
 
 GitHub Actions runs these checks on every push and pull request.
+
+### Playwright QA automation
+
+The production-style Playwright/TypeScript suite runs against the complete Docker Compose stack and covers eight UI workflows, six API contracts, three focused negative paths, and an axe accessibility scan. It retains screenshots, traces, and video on failure and publishes an HTML report as a GitHub Actions artifact.
+
+See the [QA automation test plan](docs/qa-test-plan.md) for the audit findings, coverage matrix, deterministic-data strategy, local commands, and honest authentication/authorization gaps.
+
+```powershell
+npm ci
+npx playwright install chromium
+docker compose down --volumes --remove-orphans
+docker compose up --build --wait --wait-timeout 180
+npm run test:e2e
+npm run test:e2e:report
+```
+
+![Playwright HTML report summary](demo/playwright-report.png)
 
 ## Roadmap
 
