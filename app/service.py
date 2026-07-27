@@ -1,7 +1,7 @@
 import hashlib
 from datetime import UTC, datetime
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -32,10 +32,11 @@ def ingest(db: Session, filename: str, data: bytes) -> Document:
 
     business_duplicate = None
     number = parsed.fields.get("document_number")
-    if number:
+    vendor = parsed.fields.get("vendor")
+    if number and vendor:
         business_duplicate = db.scalar(select(Document).where(
             Document.document_number == number,
-            or_(Document.vendor == parsed.fields.get("vendor"), Document.vendor.is_(None)),
+            Document.vendor == vendor,
         ))
     duplicate = content_duplicate or business_duplicate
     if duplicate:

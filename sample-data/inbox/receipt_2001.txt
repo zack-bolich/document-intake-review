@@ -1,5 +1,0 @@
-Merchant: Coffee Shop
-Receipt: RCP-2001
-Date: 2026-07-04
-Total: 18.75
-Currency: USD

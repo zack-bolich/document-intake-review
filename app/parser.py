@@ -12,14 +12,14 @@ PATTERNS = {
     "document_number": re.compile(r"(?:invoice[ \t]*(?:number|no\.?|#)?|receipt[ \t]*(?:number|no\.?|#)?|reference)[ \t]*[:#-]?[ \t]*([A-Z0-9-]+)", re.I),
     "vendor": re.compile(r"(?:vendor|merchant|sold\s+by|from)\s*[:#-]\s*([^\r\n]+)", re.I),
     "amount": re.compile(
-        r"(?<!sub)(?:grand\s+total|total\s+due|total|amount\s+due|amount)"
+        r"(?<!sub)(?<!sub\s)(?:grand\s+total|total\s+due|total|amount\s+due|amount)"
         r"(?:\s*\([A-Z]{3}\))?\s*[:#-]?\s*(?:[A-Z]{3}\s*)?\$?\s*"
-        r"([0-9,]+(?:\.\d{2})?)",
+        r"([0-9,]+(?:\.\d+)?)(?![\d.])",
         re.I,
     ),
     "currency": re.compile(
         r"(?:currency|curr)\s*[:#-]?\s*([A-Z]{3})\b|"
-        r"(?:total(?:\s+due)?)\s*\(([A-Z]{3})\)",
+        r"(?<!sub)(?<!sub\s)(?:total(?:\s+due)?)\s*\(([A-Z]{3})\)",
         re.I,
     ),
     "date": re.compile(
@@ -64,7 +64,7 @@ def parse_document(filename: str, data: bytes) -> ParseResult:
     scores: dict[str, float] = {}
     for name, pattern in PATTERNS.items():
         matches = list(pattern.finditer(text))
-        match = matches[-1] if name == "amount" and matches else (matches[0] if matches else None)
+        match = matches[-1] if name in {"amount", "currency"} and matches else (matches[0] if matches else None)
         values[name] = next(
             (group.strip() for group in match.groups() if group),
             None,
@@ -87,6 +87,10 @@ def parse_document(filename: str, data: bytes) -> ParseResult:
     issues = []
     try:
         values["amount"] = Decimal(values["amount"].replace(",", "")) if values["amount"] else None
+        if values["amount"] is not None and values["amount"].as_tuple().exponent < -2:
+            values["amount"] = None
+            scores["amount"] = 0.0
+            issues.append("invalid_amount_precision")
     except InvalidOperation:
         values["amount"] = None
         scores["amount"] = 0.0

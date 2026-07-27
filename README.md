@@ -193,7 +193,7 @@ All fixtures and names are fictional. `.env.example` contains configuration only
 
 ## Verification
 
-The repository currently contains 15 backend tests and 3 frontend tests covering extraction, review, duplicates, audit history, exports, Gmail processing, and dashboard behavior.
+The repository currently contains 21 backend tests, 3 frontend component tests, and a Playwright end-to-end suite covering extraction, review, duplicates, audit history, exports, Gmail processing, dashboard behavior, accessibility, and the deployed API.
 
 ```powershell
 python -m ruff check app tests scripts/gmail_auth.py scripts/process_gmail.py scripts/generate_synthetic_pdfs.py

@@ -19,6 +19,51 @@ def test_duplicate_is_detected_and_linked(client, invoice_pdf):
     assert second["duplicate_of_id"] == first["id"]
 
 
+def test_missing_vendor_does_not_poison_business_duplicate_detection(client):
+    missing_vendor = b"""Invoice
+BILL TO
+Invoice Number: INV-1001
+Amount: 10.00
+Date: 2026-07-20
+"""
+    different_vendor = b"""Invoice
+Invoice Number: INV-1001
+Vendor: Other Company
+Amount: 99.00
+Date: 2026-07-21
+"""
+
+    first = upload(client, "vendor-missing.txt", missing_vendor, "text/plain").json()
+    second = upload(client, "different-vendor.txt", different_vendor, "text/plain").json()
+
+    assert first["vendor"] is None
+    assert first["status"] == "review"
+    assert second["vendor"] == "Other Company"
+    assert second["status"] == "approved"
+    assert second["duplicate_of_id"] is None
+
+
+def test_same_vendor_and_number_are_a_business_duplicate(client):
+    first_data = b"""Invoice
+Invoice Number: INV-2001
+Vendor: Synthetic Supply
+Amount: 10.00
+Date: 2026-07-20
+"""
+    changed_data = b"""Invoice
+Invoice Number: INV-2001
+Vendor: Synthetic Supply
+Amount: 11.00
+Date: 2026-07-21
+"""
+
+    first = upload(client, "first.txt", first_data, "text/plain").json()
+    second = upload(client, "changed.txt", changed_data, "text/plain").json()
+
+    assert second["status"] == "duplicate"
+    assert second["duplicate_of_id"] == first["id"]
+
+
 def test_review_correction_and_approval(client):
     partial = b"INVOICE\nVendor: Synthetic Repairs\nInvoice Number: INV-LOW-1"
     record = upload(client, "partial.txt", partial, "text/plain").json()

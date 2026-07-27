@@ -17,6 +17,9 @@ htmlcov/
 frontend/node_modules/
 frontend/dist/
 frontend/.env.local
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
 node_modules/
 playwright-report/
 test-results/

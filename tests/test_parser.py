@@ -57,3 +57,48 @@ $2,510.00
     assert result.fields["currency"] == "AUD"
     assert result.fields["document_date"].isoformat() == "2022-07-19"
     assert result.issues == []
+
+
+def test_amount_and_currency_come_from_final_total_not_subtotal():
+    text = b"""Invoice
+Vendor: Synthetic Exporter
+Invoice Number: INV-NZD-1
+Sub Total (AUD): 10.00
+Total (NZD): 20.00
+Date: 2026-07-20
+"""
+
+    result = parse_document("multi-currency.txt", text)
+
+    assert result.fields["amount"] == Decimal("20.00")
+    assert result.fields["currency"] == "NZD"
+    assert result.issues == []
+
+
+def test_one_decimal_amount_is_parsed_without_truncation():
+    text = b"""Invoice
+Vendor: Synthetic Supply
+Invoice Number: INV-DECIMAL-1
+Total: $1,245.5
+Date: 2026-07-20
+"""
+
+    result = parse_document("one-decimal.txt", text)
+
+    assert result.fields["amount"] == Decimal("1245.5")
+    assert result.issues == []
+
+
+def test_more_than_two_decimal_places_requires_review():
+    text = b"""Invoice
+Vendor: Synthetic Supply
+Invoice Number: INV-PRECISION-1
+Total: $1,245.503
+Date: 2026-07-20
+"""
+
+    result = parse_document("three-decimals.txt", text)
+
+    assert result.fields["amount"] is None
+    assert "invalid_amount_precision" in result.issues
+    assert "missing_amount" in result.issues
