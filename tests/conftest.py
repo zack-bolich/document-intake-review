@@ -1,4 +1,5 @@
 import os
+
 os.environ["DATABASE_URL"] = "sqlite:///./test_document_intake.db"
 
 import pytest

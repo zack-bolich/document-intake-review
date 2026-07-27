@@ -3,7 +3,6 @@ from pathlib import Path
 
 import fitz
 
-
 FIXTURES = {
     "invoice_3001.pdf": "INVOICE\nVendor: Northstar Office Supply\nInvoice Number: INV-3001\nDate: 2026-07-15\nAmount Due: $1,245.50\nCurrency: USD",
     "receipt_2002.pdf": "RECEIPT\nMerchant: Synthetic Corner Cafe\nReceipt: RCP-2002\nDate: 2026-07-16\nTotal: $24.75\nCurrency: USD",

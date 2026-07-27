@@ -7,7 +7,6 @@ from decimal import Decimal, InvalidOperation
 
 import fitz
 
-
 PATTERNS = {
     "document_number": re.compile(r"(?:invoice[ \t]*(?:number|no\.?|#)?|receipt[ \t]*(?:number|no\.?|#)?|reference)[ \t]*[:#-]?[ \t]*([A-Z0-9-]+)", re.I),
     "vendor": re.compile(r"(?:vendor|merchant|sold\s+by|from)\s*[:#-]\s*([^\r\n]+)", re.I),
