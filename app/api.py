@@ -1,7 +1,18 @@
 from datetime import UTC, datetime
 from pathlib import Path
+from secrets import compare_digest
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
@@ -22,9 +33,19 @@ from app.service import audit, ingest
 router = APIRouter(prefix="/api/v1")
 
 
-@router.post("/documents", response_model=DocumentRead, status_code=status.HTTP_201_CREATED,
-             summary="Ingest a synthetic invoice or receipt")
-async def create_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
+def require_n8n_key(x_ledgerline_key: str | None = Header(None)) -> None:
+    expected = get_settings().n8n_api_key
+    if not expected:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "n8n integration is not configured")
+    if not x_ledgerline_key or not compare_digest(x_ledgerline_key, expected):
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "Invalid integration credential",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+
+
+async def ingest_upload(file: UploadFile, db: Session) -> Document:
     if not file.filename or file.filename.lower().rsplit(".", 1)[-1] not in {"pdf", "txt", "json"}:
         raise HTTPException(415, "Supported formats: PDF, TXT, JSON")
     data = await file.read(get_settings().max_upload_bytes + 1)
@@ -34,6 +55,23 @@ async def create_document(file: UploadFile = File(...), db: Session = Depends(ge
         return ingest(db, file.filename, data)
     except ValueError as exc:
         raise HTTPException(422, f"Document could not be parsed: {exc}") from exc
+
+
+@router.post("/documents", response_model=DocumentRead, status_code=status.HTTP_201_CREATED,
+             summary="Ingest a synthetic invoice or receipt")
+async def create_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    return await ingest_upload(file, db)
+
+
+@router.post(
+    "/integrations/n8n/documents",
+    response_model=DocumentRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_n8n_key)],
+    summary="Ingest a document from the private n8n orchestrator",
+)
+async def create_n8n_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    return await ingest_upload(file, db)
 
 
 @router.get("/documents", response_model=list[DocumentRead], summary="List records or the review queue")

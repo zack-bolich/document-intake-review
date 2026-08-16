@@ -18,6 +18,7 @@ services:
       GOOGLE_SHEETS_CREDENTIALS_FILE: /run/secrets/document-intake/service-account.json
       GOOGLE_SHEETS_SPREADSHEET_ID: ${GOOGLE_SHEETS_SPREADSHEET_ID:-}
       GOOGLE_SHEETS_RANGE: ${GOOGLE_SHEETS_RANGE:-Approved Records!A:I}
+      N8N_API_KEY: ${N8N_API_KEY:-}
     volumes:
       - ./credentials:/run/secrets/document-intake:ro
     ports: ["8000:8000"]
@@ -29,6 +30,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+  n8n:
+    profiles: ["n8n"]
+    image: ${N8N_IMAGE:-docker.n8n.io/n8nio/n8n:2.6.4}
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-}
+      N8N_SECURE_COOKIE: "false"
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Los_Angeles}
+    ports: ["127.0.0.1:5678:5678"]
+    volumes: ["n8n_data:/home/node/.n8n"]
+    depends_on:
+      api:
+        condition: service_healthy
   db:
     image: postgres:16-alpine
     environment:
@@ -43,3 +56,4 @@ services:
       retries: 10
 volumes:
   postgres_data:
+  n8n_data:
