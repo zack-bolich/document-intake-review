@@ -14,6 +14,8 @@ The project is designed as a privacy-safe portfolio demonstration: fixtures are 
 
 ![Human review drawer with field confidence and audit history](demo/review-workflow.png)
 
+![Authenticated n8n orchestration for Gmail and internal document intake](demo/n8n-orchestration.png)
+
 ![FastAPI OpenAPI documentation](demo/api-docs.png)
 
 </details>
