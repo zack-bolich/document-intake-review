@@ -1,0 +1,224 @@
+{
+  "name": "Ledgerline Authenticated Document Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map((item, itemIndex) => ({ json: item.json, binary: item.binary, pairedItem: { item: itemIndex } }));"
+      },
+      "id": "preserve-upload",
+      "name": "Preserve Upload for Retries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, -80]
+    },
+    {
+      "parameters": {
+        "formTitle": "Ledgerline Internal Document Intake",
+        "formDescription": "Upload one PDF, TXT, or JSON document for processing.",
+        "formFields": {"values": [{"fieldLabel": "Document", "fieldName": "file", "fieldType": "file", "acceptFileTypes": ".pdf,.txt,.json", "requiredField": true}]},
+        "options": {"buttonLabel": "Submit document", "path": "ledgerline-internal-intake"}
+      },
+      "id": "form-trigger",
+      "name": "Internal Upload Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [-900, -240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\nfor (const [itemIndex, item] of $input.all().entries()) {\n  const entries = Object.entries(item.binary || {});\n  if (entries.length !== 1) throw new Error('Exactly one document is required');\n  const [key, value] = entries[0];\n  items.push({ json: { source: 'internal-form', originalBinaryKey: key }, binary: { data: value }, pairedItem: { item: itemIndex } });\n}\nreturn items;"
+      },
+      "id": "normalize-form",
+      "name": "Normalize Form File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-660, -240]
+    },
+    {
+      "parameters": {
+        "pollTimes": {"item": [{"mode": "everyMinute"}]},
+        "simple": false,
+        "filters": {"q": "has:attachment (filename:pdf OR filename:txt OR filename:json) newer_than:30d"},
+        "options": {}
+      },
+      "id": "gmail-trigger",
+      "name": "Gmail Attachment Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [-900, 80]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {"downloadAttachments": true}
+      },
+      "id": "gmail-download",
+      "name": "Download Gmail Attachments",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [-660, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allowed = new Set(['pdf', 'txt', 'json']);\nconst output = [];\nfor (const [itemIndex, item] of $input.all().entries()) {\n  for (const attachment of Object.values(item.binary || {})) {\n    const name = String(attachment.fileName || 'attachment').toLowerCase();\n    const extension = name.includes('.') ? name.split('.').pop() : '';\n    if (allowed.has(extension)) output.push({ json: { source: 'gmail', messageId: item.json.id }, binary: { data: attachment }, pairedItem: { item: itemIndex } });\n  }\n}\nreturn output;"
+      },
+      "id": "split-gmail",
+      "name": "Select Supported Attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-420, 80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/v1/integrations/n8n/documents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {"parameters": [{"parameterType": "formBinaryData", "name": "file", "inputDataFieldName": "data"}]},
+        "options": {"response": {"response": {"fullResponse": true, "neverError": true}}}
+      },
+      "id": "submit-first",
+      "name": "Submit to Ledgerline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [80, -80],
+      "notes": "Bind an n8n Header Auth credential with header name X-Ledgerline-Key. Do not put the key in this workflow."
+    },
+    {
+      "parameters": {"conditions": {"options": {"typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.statusCode }}", "rightValue": 500, "operator": {"type": "number", "operation": "gte"}}], "combinator": "and"}, "options": {}},
+      "id": "is-5xx-first",
+      "name": "Transient Failure",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [320, -80]
+    },
+    {
+      "parameters": {"amount": 2, "unit": "seconds"},
+      "id": "wait-two",
+      "name": "Wait 2 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [560, -200]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const original = $('Preserve Upload for Retries').item;\nif (!original.binary?.data) throw new Error('Original upload binary is unavailable for retry');\nreturn { json: $json, binary: { data: original.binary.data } };"
+      },
+      "id": "restore-upload-second",
+      "name": "Restore Upload for Retry 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, -200]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "http://api:8000/api/v1/integrations/n8n/documents", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
+        "sendBody": true, "contentType": "multipart-form-data",
+        "bodyParameters": {"parameters": [{"parameterType": "formBinaryData", "name": "file", "inputDataFieldName": "data"}]},
+        "options": {"response": {"response": {"fullResponse": true, "neverError": true}}}
+      },
+      "id": "submit-second",
+      "name": "Retry Ledgerline Once",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1040, -200]
+    },
+    {
+      "parameters": {"conditions": {"options": {"typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.statusCode }}", "rightValue": 500, "operator": {"type": "number", "operation": "gte"}}], "combinator": "and"}, "options": {}},
+      "id": "is-5xx-second",
+      "name": "Still Transient Failure",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1280, -200]
+    },
+    {
+      "parameters": {"amount": 4, "unit": "seconds"},
+      "id": "wait-four",
+      "name": "Wait 4 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1520, -320]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const original = $('Preserve Upload for Retries').item;\nif (!original.binary?.data) throw new Error('Original upload binary is unavailable for retry');\nreturn { json: $json, binary: { data: original.binary.data } };"
+      },
+      "id": "restore-upload-third",
+      "name": "Restore Upload for Retry 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, -320]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "http://api:8000/api/v1/integrations/n8n/documents", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
+        "sendBody": true, "contentType": "multipart-form-data",
+        "bodyParameters": {"parameters": [{"parameterType": "formBinaryData", "name": "file", "inputDataFieldName": "data"}]},
+        "options": {"response": {"response": {"fullResponse": true, "neverError": true}}}
+      },
+      "id": "submit-third",
+      "name": "Final Ledgerline Attempt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, -320]
+    },
+    {
+      "parameters": {
+        "rules": {"values": [
+          {"conditions": {"options": {"typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.body.status }}", "rightValue": "approved", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "renameOutput": true, "outputKey": "approved"},
+          {"conditions": {"options": {"typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.body.status }}", "rightValue": "review", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "renameOutput": true, "outputKey": "review"},
+          {"conditions": {"options": {"typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.body.status }}", "rightValue": "duplicate", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "renameOutput": true, "outputKey": "duplicate"}
+        ]},
+        "options": {"fallbackOutput": "extra", "renameFallbackOutput": "failure"}
+      },
+      "id": "route-status",
+      "name": "Route Ledgerline Status",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [2240, 0]
+    },
+    {"parameters": {"assignments": {"assignments": [{"name": "outcome", "value": "approved", "type": "string"}]}, "options": {}}, "id": "approved", "name": "Approved", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [2480, -180]},
+    {"parameters": {"assignments": {"assignments": [{"name": "subject", "value": "=Ledgerline review required: {{ $json.body.document_number || $json.body.id }}", "type": "string"}, {"name": "message", "value": "=A document requires review in Ledgerline. Record: {{ JSON.stringify($json.body) }}", "type": "string"}]}, "options": {}}, "id": "review", "name": "Review Required", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [2480, -40]},
+    {"parameters": {"assignments": {"assignments": [{"name": "outcome", "value": "duplicate", "type": "string"}]}, "options": {}}, "id": "duplicate", "name": "Duplicate", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [2480, 100]},
+    {"parameters": {"assignments": {"assignments": [{"name": "subject", "value": "Ledgerline intake failed", "type": "string"}, {"name": "message", "value": "=Ledgerline rejected the submission or remained unavailable. HTTP {{ $json.statusCode }}: {{ JSON.stringify($json.body) }}", "type": "string"}]}, "options": {}}, "id": "failure", "name": "Terminal Failure", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [2480, 240]},
+    {
+      "parameters": {"fromEmail": "ledgerline@localhost", "toEmail": "={{ $vars.LEDGERLINE_OPERATOR_EMAIL }}", "subject": "={{ $json.subject }}", "emailFormat": "text", "text": "={{ $json.message }}", "options": {}},
+      "id": "email-operator",
+      "name": "Email Operator",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [2720, 80]
+    }
+  ],
+  "connections": {
+    "Internal Upload Form": {"main": [[{"node": "Normalize Form File", "type": "main", "index": 0}]]},
+    "Normalize Form File": {"main": [[{"node": "Preserve Upload for Retries", "type": "main", "index": 0}]]},
+    "Gmail Attachment Trigger": {"main": [[{"node": "Download Gmail Attachments", "type": "main", "index": 0}]]},
+    "Download Gmail Attachments": {"main": [[{"node": "Select Supported Attachments", "type": "main", "index": 0}]]},
+    "Select Supported Attachments": {"main": [[{"node": "Preserve Upload for Retries", "type": "main", "index": 0}]]},
+    "Preserve Upload for Retries": {"main": [[{"node": "Submit to Ledgerline", "type": "main", "index": 0}]]},
+    "Submit to Ledgerline": {"main": [[{"node": "Transient Failure", "type": "main", "index": 0}]]},
+    "Transient Failure": {"main": [[{"node": "Wait 2 Seconds", "type": "main", "index": 0}], [{"node": "Route Ledgerline Status", "type": "main", "index": 0}]]},
+    "Wait 2 Seconds": {"main": [[{"node": "Restore Upload for Retry 1", "type": "main", "index": 0}]]},
+    "Restore Upload for Retry 1": {"main": [[{"node": "Retry Ledgerline Once", "type": "main", "index": 0}]]},
+    "Retry Ledgerline Once": {"main": [[{"node": "Still Transient Failure", "type": "main", "index": 0}]]},
+    "Still Transient Failure": {"main": [[{"node": "Wait 4 Seconds", "type": "main", "index": 0}], [{"node": "Route Ledgerline Status", "type": "main", "index": 0}]]},
+    "Wait 4 Seconds": {"main": [[{"node": "Restore Upload for Retry 2", "type": "main", "index": 0}]]},
+    "Restore Upload for Retry 2": {"main": [[{"node": "Final Ledgerline Attempt", "type": "main", "index": 0}]]},
+    "Final Ledgerline Attempt": {"main": [[{"node": "Route Ledgerline Status", "type": "main", "index": 0}]]},
+    "Route Ledgerline Status": {"main": [[{"node": "Approved", "type": "main", "index": 0}], [{"node": "Review Required", "type": "main", "index": 0}], [{"node": "Duplicate", "type": "main", "index": 0}], [{"node": "Terminal Failure", "type": "main", "index": 0}]]},
+    "Review Required": {"main": [[{"node": "Email Operator", "type": "main", "index": 0}]]},
+    "Terminal Failure": {"main": [[{"node": "Email Operator", "type": "main", "index": 0}]]}
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "tags": []
+}

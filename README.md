@@ -183,7 +183,9 @@ OAuth scopes are limited to `gmail.readonly` and `gmail.send`. The processor rep
 
 ## Optional n8n orchestration
 
-Ledgerline does not require n8n. An n8n workflow can be added as an orchestration layer—Gmail trigger, attachment download, API upload, status-based routing, notifications, and scheduled retries—while FastAPI remains responsible for parsing, validation, deduplication, review state, and audit history. Exported workflows must contain no credentials, and any public webhook should be authenticated.
+Ledgerline does not require n8n. The included optional workflow accepts an internal file upload or Gmail attachment, submits the original file to a private authenticated API endpoint, routes Ledgerline's authoritative status, retries only transient server failures, and emails an operator for review or terminal failures. FastAPI remains responsible for parsing, validation, deduplication, review state, and audit history.
+
+The n8n service is disabled by default and binds only to `127.0.0.1`. See [the n8n orchestration guide](docs/n8n-orchestration.md) for secrets, workflow import, Gmail and SMTP credentials, activation, key rotation, and local operation.
 
 ## Confidence and privacy
 
@@ -225,5 +227,4 @@ npm run test:e2e:report
 
 ## Roadmap
 
-- authenticated optional n8n webhook and example workflow
 - optional low-confidence LLM extraction with provenance
