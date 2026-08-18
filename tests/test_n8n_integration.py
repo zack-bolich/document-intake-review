@@ -103,6 +103,30 @@ def test_exported_workflow_is_credential_free_and_preserves_boundaries():
     )
     assert waits == [2, 4]
 
+    nodes_by_name = {node["name"]: node for node in nodes}
+    preserve_code = nodes_by_name["Preserve Upload for Retries"]["parameters"]["jsCode"]
+    assert "binary: item.binary" in preserve_code
+
+    retry_predecessors = {
+        "Restore Upload for Retry 1": "Retry Ledgerline Once",
+        "Restore Upload for Retry 2": "Final Ledgerline Attempt",
+    }
+    for restore_name, retry_name in retry_predecessors.items():
+        restore = nodes_by_name[restore_name]
+        assert restore["parameters"]["mode"] == "runOnceForEachItem"
+        assert "Preserve Upload for Retries" in restore["parameters"]["jsCode"]
+        assert "original.binary.data" in restore["parameters"]["jsCode"]
+        assert workflow["connections"][restore_name]["main"] == [
+            [{"node": retry_name, "type": "main", "index": 0}]
+        ]
+
+    assert workflow["connections"]["Wait 2 Seconds"]["main"] == [
+        [{"node": "Restore Upload for Retry 1", "type": "main", "index": 0}]
+    ]
+    assert workflow["connections"]["Wait 4 Seconds"]["main"] == [
+        [{"node": "Restore Upload for Retry 2", "type": "main", "index": 0}]
+    ]
+
     email_sources = {
         connection["node"]
         for source in ("Review Required", "Terminal Failure")
