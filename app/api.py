@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from pathlib import Path
 from secrets import compare_digest
 
@@ -18,6 +17,16 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
+from app.document_lifecycle import (
+    ApprovalFieldsMissing,
+    DeadLetterNotFound,
+    DocumentChanges,
+    DocumentIntakeLifecycle,
+    DocumentNotFound,
+    DuplicateCannotBeApproved,
+    ParseFailed,
+    RetryFailed,
+)
 from app.exports import append_to_google_sheet, approved_csv
 from app.models import AuditEvent, DeadLetter, Document, DocumentStatus
 from app.schemas import (
@@ -28,7 +37,6 @@ from app.schemas import (
     DocumentRead,
     ExportResult,
 )
-from app.service import audit, ingest
 
 router = APIRouter(prefix="/api/v1")
 
@@ -52,8 +60,8 @@ async def ingest_upload(file: UploadFile, db: Session) -> Document:
     if len(data) > get_settings().max_upload_bytes:
         raise HTTPException(413, "File exceeds upload limit")
     try:
-        return ingest(db, file.filename, data)
-    except ValueError as exc:
+        return DocumentIntakeLifecycle(db).intake(file.filename, data)
+    except ParseFailed as exc:
         raise HTTPException(422, f"Document could not be parsed: {exc}") from exc
 
 
@@ -92,42 +100,34 @@ def get_document(document_id: str, db: Session = Depends(get_db)):
 
 @router.patch("/documents/{document_id}", response_model=DocumentRead, summary="Correct a review record")
 def correct_document(document_id: str, correction: DocumentCorrection, db: Session = Depends(get_db)):
-    document = db.get(Document, document_id)
-    if not document:
-        raise HTTPException(404, "Document not found")
-    changes = correction.model_dump(exclude_unset=True, exclude={"actor"})
-    before = {key: str(getattr(document, key)) for key in changes}
-    for key, value in changes.items():
-        setattr(document, key, value)
-    audit(db, document.id, "corrected", correction.actor, {"before": before, "changed_fields": list(changes)})
-    db.commit()
-    db.refresh(document)
-    return document
+    try:
+        return DocumentIntakeLifecycle(db).correct(
+            document_id,
+            DocumentChanges(correction.model_dump(exclude_unset=True, exclude={"actor"})),
+            actor=correction.actor,
+        )
+    except DocumentNotFound as exc:
+        raise HTTPException(404, "Document not found") from exc
 
 
 @router.post("/documents/{document_id}/approve", response_model=DocumentRead, summary="Approve a reviewed record")
 def approve_document(document_id: str, request: ApprovalRequest, db: Session = Depends(get_db)):
-    document = db.get(Document, document_id)
-    if not document:
-        raise HTTPException(404, "Document not found")
-    if document.status == DocumentStatus.DUPLICATE:
-        raise HTTPException(409, "Duplicate records cannot be approved")
-    missing = [name for name in ("vendor", "amount", "document_date", "document_number") if not getattr(document, name)]
-    if missing:
-        raise HTTPException(422, {"missing_fields": missing})
-    document.status = DocumentStatus.APPROVED
-    document.approved_at = datetime.now(UTC)
-    audit(db, document.id, "approved", request.actor)
-    db.commit()
-    db.refresh(document)
-    return document
+    try:
+        return DocumentIntakeLifecycle(db).approve(document_id, actor=request.actor)
+    except DocumentNotFound as exc:
+        raise HTTPException(404, "Document not found") from exc
+    except DuplicateCannotBeApproved as exc:
+        raise HTTPException(409, "Duplicate records cannot be approved") from exc
+    except ApprovalFieldsMissing as exc:
+        raise HTTPException(422, {"missing_fields": exc.missing_fields}) from exc
 
 
 @router.get("/documents/{document_id}/audit", response_model=list[AuditRead])
 def document_audit(document_id: str, db: Session = Depends(get_db)):
-    if not db.get(Document, document_id):
-        raise HTTPException(404, "Document not found")
-    return list(db.scalars(select(AuditEvent).where(AuditEvent.document_id == document_id).order_by(AuditEvent.created_at)))
+    try:
+        return DocumentIntakeLifecycle(db).audit(document_id)
+    except DocumentNotFound as exc:
+        raise HTTPException(404, "Document not found") from exc
 
 
 @router.get("/dead-letters", response_model=list[DeadLetterRead], summary="Inspect parsing failures")
@@ -141,30 +141,12 @@ def list_dead_letters(db: Session = Depends(get_db)):
     summary="Retry a failed extraction",
 )
 def retry_dead_letter(dead_letter_id: str, db: Session = Depends(get_db)):
-    dead_letter = db.get(DeadLetter, dead_letter_id)
-    if not dead_letter:
-        raise HTTPException(404, "Dead letter not found")
-    filename, payload = dead_letter.filename, dead_letter.payload
-    dead_letter.retry_count += 1
-    dead_letter.updated_at = datetime.now(UTC)
-    db.commit()
     try:
-        document = ingest(db, filename, payload)
-    except ValueError as exc:
-        replacement = db.scalar(
-            select(DeadLetter).where(DeadLetter.content_hash == dead_letter.content_hash)
-            .order_by(DeadLetter.created_at.desc())
-        )
-        if replacement and replacement.id != dead_letter.id:
-            db.delete(replacement)
-        dead_letter.error = str(exc)
-        db.commit()
+        return DocumentIntakeLifecycle(db).retry(dead_letter_id)
+    except DeadLetterNotFound as exc:
+        raise HTTPException(404, "Dead letter not found") from exc
+    except RetryFailed as exc:
         raise HTTPException(422, f"Retry failed: {exc}") from exc
-    db.delete(dead_letter)
-    audit(db, document.id, "retried_from_dead_letter", details={"retry_count": dead_letter.retry_count})
-    db.commit()
-    db.refresh(document)
-    return document
 
 
 @router.get(
@@ -179,7 +161,11 @@ def export_approved_csv(db: Session = Depends(get_db)):
         .order_by(Document.approved_at, Document.id)
     ))
     for document in documents:
-        audit(db, document.id, "exported_csv", details={"destination": "download"})
+        db.add(AuditEvent(
+            document_id=document.id,
+            action="exported_csv",
+            details={"destination": "download"},
+        ))
     db.commit()
     return Response(
         content=approved_csv(documents),
@@ -230,7 +216,11 @@ def export_google_sheets(db: Session = Depends(get_db)):
     except Exception as exc:
         raise HTTPException(502, f"Google Sheets export failed: {exc}") from exc
     for document in documents:
-        audit(db, document.id, "exported_google_sheets", details={"spreadsheet_id": spreadsheet_id})
+        db.add(AuditEvent(
+            document_id=document.id,
+            action="exported_google_sheets",
+            details={"spreadsheet_id": spreadsheet_id},
+        ))
     db.commit()
     return ExportResult(
         destination="google_sheets",

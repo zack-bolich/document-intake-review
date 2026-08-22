@@ -10,11 +10,13 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import DocumentStatus, GmailAttachment
-from app.service import ingest
+from app.document_lifecycle import (
+    DocumentIntakeLifecycle,
+    GmailSource,
+    SourceAlreadyProcessed,
+)
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -49,6 +51,7 @@ def build_gmail_service(token_file: Path):
 
 
 def process_pdf_attachments(db: Session, service, query: str) -> dict[str, int]:
+    lifecycle = DocumentIntakeLifecycle(db)
     summary = {
         "messages_scanned": 0,
         "attachments_seen": 0,
@@ -66,36 +69,28 @@ def process_pdf_attachments(db: Session, service, query: str) -> dict[str, int]:
         for part in _pdf_parts(message.get("payload", {})):
             summary["attachments_seen"] += 1
             attachment_id = part.get("body", {}).get("attachmentId") or f"inline:{part.get('partId', '')}"
-            existing = db.scalar(select(GmailAttachment).where(
-                GmailAttachment.gmail_message_id == message_id,
-                GmailAttachment.gmail_attachment_id == attachment_id,
-            ))
-            if existing:
-                summary["skipped"] += 1
-                continue
+            source = GmailSource(message_id, attachment_id)
             try:
                 data = _attachment_bytes(service, message_id, part)
-                document = ingest(db, part["filename"], data)
-                outcome = document.status.value
-                summary[outcome] += 1
-                tracker = GmailAttachment(
-                    gmail_message_id=message_id,
-                    gmail_attachment_id=attachment_id,
-                    filename=part["filename"],
-                    document_id=document.id,
-                    outcome=outcome,
-                )
             except Exception as exc:
-                summary["failed"] += 1
-                tracker = GmailAttachment(
-                    gmail_message_id=message_id,
-                    gmail_attachment_id=attachment_id,
-                    filename=part.get("filename", "attachment.pdf"),
-                    outcome=DocumentStatus.FAILED.value,
-                    error=str(exc),
+                repeated = lifecycle.record_gmail_failure(
+                    source,
+                    part.get("filename", "attachment.pdf"),
+                    str(exc),
                 )
-            db.add(tracker)
-            db.commit()
+                if isinstance(repeated, SourceAlreadyProcessed):
+                    summary["skipped"] += 1
+                    continue
+                summary["failed"] += 1
+                continue
+            try:
+                result = lifecycle.intake_gmail(part["filename"], data, source)
+                if isinstance(result, SourceAlreadyProcessed):
+                    summary["skipped"] += 1
+                else:
+                    summary[result.status.value] += 1
+            except Exception:
+                summary["failed"] += 1
     return summary
 
 
