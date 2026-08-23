@@ -208,6 +208,13 @@ npm run build
 
 GitHub Actions runs these checks on every push and pull request.
 
+### Multi-agent development
+
+Codex, Codex Cloud, Claude Code, and Devin work through isolated branches and worktrees, scoped
+GitHub issues, and reviewed pull requests. See the
+[multi-agent development workflow](docs/multi-agent-workflow.md) and repository-wide
+[agent contract](AGENTS.md) before assigning parallel work.
+
 ### Playwright QA automation
 
 The production-style Playwright/TypeScript suite runs against the complete Docker Compose stack and covers eight UI workflows, six API contracts, three focused negative paths, and an axe accessibility scan. It retains screenshots, traces, and video on failure and publishes an HTML report as a GitHub Actions artifact.

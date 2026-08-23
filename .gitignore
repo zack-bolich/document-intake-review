@@ -28,3 +28,6 @@ credentials/
 service-account*.json
 exports/
 .demo-logs/
+.agents/skills/
+skills-lock.json
+.worktrees/
