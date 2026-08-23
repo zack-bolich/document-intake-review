@@ -37,12 +37,19 @@ if (Test-Path -LiteralPath $worktreePath) {
     throw "Worktree path already exists: $worktreePath"
 }
 
-git -C $repositoryRoot rev-parse --verify "$Base^{commit}" | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    throw "Base revision does not exist locally: $Base. Run git fetch origin and try again."
-}
-
 if ($PSCmdlet.ShouldProcess($worktreePath, "Create branch $branch from $Base")) {
+    if ($Base -eq 'origin/main') {
+        git -C $repositoryRoot fetch origin main
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Failed to refresh origin/main.'
+        }
+    }
+
+    git -C $repositoryRoot rev-parse --verify "$Base^{commit}" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Base revision does not exist locally: $Base."
+    }
+
     git -C $repositoryRoot worktree add -b $branch $worktreePath $Base
     if ($LASTEXITCODE -ne 0) {
         throw 'git worktree add failed.'

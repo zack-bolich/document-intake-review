@@ -66,6 +66,7 @@ From the repository root, create an isolated sibling worktree:
 
 This creates branch `agent/codex/42-status-filter` and a sibling directory such as
 `document-intake-review-codex-42-status-filter`. Open that directory as the agent's workspace.
+With the default base, the helper fetches `origin/main` immediately before creating the branch.
 
 Useful commands:
 
