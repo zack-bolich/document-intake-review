@@ -16,7 +16,8 @@ These are roles, not permanent tool assignments. Pick the agent that fits each b
 
 ## Pilot setup
 
-1. Protect `main` on GitHub. Require pull requests and the `backend`, `frontend`, and `e2e` checks.
+1. Protect `main` on GitHub. Require pull requests and the `test`, `frontend`, and `e2e` job
+   checks. (`backend` is the workflow name; branch protection uses the reported job/check names.)
 2. Create one GitHub issue per independently mergeable change using the task template below.
 3. Label issues by area (`backend`, `frontend`, `e2e`, `docs`, or `integration`) and agent when useful.
 4. Assign non-overlapping files to tasks. Treat API schemas, frontend types, models, lockfiles,
