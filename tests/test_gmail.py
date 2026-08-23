@@ -14,10 +14,12 @@ class FakeRequest:
 
 
 class FakeAttachments:
-    def __init__(self, data):
+    def __init__(self, data, messages):
         self.data = data
+        self.messages = messages
 
     def get(self, **_):
+        self.messages.attachment_get_calls += 1
         return FakeRequest({"data": self.data})
 
 
@@ -25,6 +27,7 @@ class FakeMessages:
     def __init__(self, pdf_bytes):
         self.encoded = base64.urlsafe_b64encode(pdf_bytes).decode().rstrip("=")
         self.sent = []
+        self.attachment_get_calls = 0
 
     def list(self, **_):
         return FakeRequest({"messages": [{"id": "message-1"}]})
@@ -42,7 +45,7 @@ class FakeMessages:
         })
 
     def attachments(self):
-        return FakeAttachments(self.encoded)
+        return FakeAttachments(self.encoded, self)
 
     def send(self, **kwargs):
         self.sent.append(kwargs["body"]["raw"])
@@ -77,6 +80,7 @@ def test_gmail_pdf_ingestion_is_idempotent(invoice_pdf):
     }
     assert second["skipped"] == 1
     assert second["approved"] == 0
+    assert service.message_api.attachment_get_calls == 1
 
 
 def test_summary_email_contains_batch_counts(invoice_pdf):

@@ -70,6 +70,9 @@ def process_pdf_attachments(db: Session, service, query: str) -> dict[str, int]:
             summary["attachments_seen"] += 1
             attachment_id = part.get("body", {}).get("attachmentId") or f"inline:{part.get('partId', '')}"
             source = GmailSource(message_id, attachment_id)
+            if lifecycle.gmail_source_result(source):
+                summary["skipped"] += 1
+                continue
             try:
                 data = _attachment_bytes(service, message_id, part)
             except Exception as exc:

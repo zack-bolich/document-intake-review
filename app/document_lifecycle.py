@@ -89,10 +89,14 @@ class DocumentIntakeLifecycle:
         data: bytes,
         source: GmailSource,
     ) -> Document | SourceAlreadyProcessed:
-        existing = self._gmail_attachment(source)
+        existing = self.gmail_source_result(source)
         if existing:
-            return SourceAlreadyProcessed(existing.outcome)
+            return existing
         return self._intake(filename, data, source)
+
+    def gmail_source_result(self, source: GmailSource) -> SourceAlreadyProcessed | None:
+        existing = self._gmail_attachment(source)
+        return SourceAlreadyProcessed(existing.outcome) if existing else None
 
     def record_gmail_failure(
         self,
@@ -100,9 +104,9 @@ class DocumentIntakeLifecycle:
         filename: str,
         error: str,
     ) -> SourceAlreadyProcessed | None:
-        existing = self._gmail_attachment(source)
+        existing = self.gmail_source_result(source)
         if existing:
-            return SourceAlreadyProcessed(existing.outcome)
+            return existing
         try:
             self.db.add(
                 GmailAttachment(
